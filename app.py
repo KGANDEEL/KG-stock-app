@@ -69,7 +69,7 @@ hma_length = st.sidebar.number_input("HMA Length (Signal)", value=21)
 tab1, tab2 = st.tabs(["📊 الشارت المتكامل المتعدد الفريمات", "🔍 رادار فحص وتصفية السوق المشروط"])
 
 # ==========================================
-# 3. سلة الأسهم (63 شركة القيادية والأسمنتات)
+# 3. سلة الأسهم (المجموعة كاملة لضمان الفحص الموحد)
 # ==========================================
 saudi_market = {
     "3080": "أسمنت الشرقية", "4250": "جبل عمر", "4110": "باتك",
@@ -92,22 +92,25 @@ with tab1:
         with st.spinner("جاري جلب الفريمات المتعددة ومطابقة الألوان..."):
             ticker = f"{stock_number}.SR"
             df_1d = yf.Ticker(ticker).history(period="1y", interval="1d")
-            df_4h = yf.Ticker(ticker).history(period="1y", interval="1h") # تقريب لفريم الـ 4h عبر التجميع
             
             if not df_1d.empty and len(df_1d) > 100:
-                # حساب الخطوط الأساسية
+                df_1d = df_1d.dropna(subset=['Close'])
                 df_1d['KAMA'] = calculate_kama(df_1d['Close'], length=kama_length)
                 df_1d['HMA_Signal'] = calculate_hma(df_1d['Close'], length=hma_length)
                 
-                # حساب الـ MTF (HMA 50 على فريم الـ 4 ساعات وإعادة مواءمته)
-                if not df_4h.empty:
-                    df_4h['HMA_50'] = calculate_hma(df_4h['Close'], 50)
-                    df_4h_resampled = df_4h['HMA_50'].resample('D').last().reindex(df_1d.index, method='ffill')
-                    df_1d['MTF_HMA'] = df_4h_resampled
-                else:
-                    df_1d['MTF_HMA'] = calculate_hma(df_1d['Close'], 50) # خط دفاع احتياطي
+                # جلب فريم الـ 4 ساعات الحقيقي (تقريبياً عبر فريم الـ 90 دقيقة المتوفر لبيانات أدق)
+                try:
+                    df_4h = yf.Ticker(ticker).history(period="3mo", interval="90m")
+                    if not df_4h.empty:
+                        df_4h['HMA_50'] = calculate_hma(df_4h['Close'], 50)
+                        df_4h_resampled = df_4h['HMA_50'].resample('D').last().reindex(df_1d.index, method='ffill')
+                        df_1d['MTF_HMA'] = df_4h_resampled
+                    else:
+                        df_1d['MTF_HMA'] = calculate_hma(df_1d['Close'], 50)
+                except:
+                    df_1d['MTF_HMA'] = calculate_hma(df_1d['Close'], 50)
                 
-                # تحديد لون خط إشارة HMA المتوافق مع الشارت تماماً
+                # حساب الألوان بناءً على التغير الصارم المتوافق مع TradingView
                 colors = []
                 for i in range(len(df_1d)):
                     if i == 0 or pd.isna(df_1d['HMA_Signal'].iloc[i]) or pd.isna(df_1d['HMA_Signal'].iloc[i-1]):
@@ -120,15 +123,13 @@ with tab1:
                 fig = go.Figure()
                 fig.add_trace(go.Candlestick(x=df_1d.index, open=df_1d['Open'], high=df_1d['High'], low=df_1d['Low'], close=df_1d['Close'], name="السعر"))
                 fig.add_trace(go.Scatter(x=df_1d.index, y=df_1d['KAMA'], name="KAMA Trend (Blue)", line=dict(color='blue', width=2)))
-                
-                # رسم الـ HMA كقطع ملونة لمطابقة الشارت
                 fig.add_trace(go.Scatter(x=df_1d.index, y=df_1d['HMA_Signal'], name="HMA Signal (Dynamic)", line=dict(color='orange', width=2)))
+                
                 fig.update_layout(template="plotly_dark", height=600, xaxis_rangeslider_visible=False)
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # قراءة الحالة الحالية لإطلاعك عليها
-                curr_color = "أخضر (صاعد)" if colors[-1] == 'green' else "أحمر (هابط)"
-                st.subheader(f"🔍 فحص الحالة اللحظية للسهم الحالية: خط HMA يعتبر حالياً: **{curr_color}**")
+                curr_color = "🟢 أخضر (صاعد)" if colors[-1] == 'green' else "🔴 أحمر (هابط)"
+                st.subheader(f"🔍 فحص الحالة اللحظية للسهم: خط HMA يعتبر حالياً: **{curr_color}**")
             else:
                 st.error("البيانات غير كافية أو رقم السهم غير صحيح.")
 
@@ -149,29 +150,24 @@ with tab2:
     
     if st.button("تشغيل رادار الاقتناص المطور 🚀"):
         results = []
-        tickers_list = [f"{code}.SR" for code in saudi_market.keys()]
-        
-        with St_spinner if 'St_spinner' in globals() else st.spinner("⚡ جاري سحب وتطهير بيانات السوق اليومية ولحظية الفريمات الأكبر..."):
-            # جلب البيانات اليومية
-            all_data_1d = yf.download(tickers_list, period="1y", interval="1d", group_by='ticker', progress=False)
-            
         progress_bar = st.progress(0)
         total_stocks = len(saudi_market)
         
+        # حلقة فحص فردية عميقة لكل سهم لضمان دقة حساب الفريمات المتعددة والتزامن
         for index, (code, name) in enumerate(saudi_market.items()):
             ticker_key = f"{code}.SR"
             try:
-                if ticker_key not in all_data_1d.columns.levels[0]:
-                    continue
+                # جلب البيانات بشكل منفرد ومباشر لضمان التطهير التام للتواريخ الفارغة
+                ticker_obj = yf.Ticker(ticker_key)
+                df = ticker_obj.history(period="1y", interval="1d").dropna(subset=['Close'])
                 
-                df = all_data_1d[ticker_key].copy().dropna(subset=['Close'])
                 if len(df) < 100:
                     continue
                 
                 close = df['Close']
                 c_price = close.iloc[-1]
                 
-                # 1. حساب المتوسطات الأساسية
+                # 1. حساب المتوسطات الأساسية للشمعة الحالية والسابقة لضبط اللون
                 hma_series = calculate_hma(close, length=hma_length)
                 kama_series = calculate_kama(close, length=kama_length)
                 
@@ -182,32 +178,36 @@ with tab2:
                 is_hma_green = hma_curr > hma_prev
                 hma_status_str = "🟢 أخضر (صاعد)" if is_hma_green else "🔴 أحمر (هابط)"
                 
-                # 2. تتبع شرط الفريم الأكبر (MTF) تقريبياً على البيانات الحالية لسرعة الأداء
-                mtf_hma_approx = calculate_hma(close, 50).iloc[-1]
-                is_mtf_bullish = c_price > mtf_hma_approx
+                # 2. جلب حساب الـ MTF الحقيقي لفريم الـ 4 ساعات
+                df_4h = ticker_obj.history(period="3mo", interval="90m")
+                if not df_4h.empty:
+                    df_4h['HMA_50'] = calculate_hma(df_4h['Close'], 50)
+                    mtf_val = df_4h['HMA_50'].iloc[-1]
+                else:
+                    mtf_val = calculate_hma(close, 50).iloc[-1]
+                
+                is_mtf_bullish = c_price > mtf_val
                 
                 # 3. حساب مؤشرات Trinity المخصصة للسيولة والزخم
                 price_hma_trinity = calculate_hma(close, hma_src_len)
-                rsi_fast = calculate_rsi(price_hma_trinity, rsi_fast_len)
-                rsi_slow = calculate_rsi(price_hma_trinity, rsi_slow_len)
+                rsi_fast = calculate_rsi(price_hma_trinity, rsi_fast_len).iloc[-1]
+                rsi_slow = calculate_rsi(price_hma_trinity, rsi_slow_len).iloc[-1]
                 
-                vol_hma = calculate_hma(df['Volume'], vol_hma_len)
-                is_high_vol = df['Volume'].iloc[-1] > vol_hma.iloc[-1]
+                vol_hma = calculate_hma(df['Volume'], vol_hma_len).iloc[-1]
+                is_high_vol = df['Volume'].iloc[-1] > vol_hma
                 
                 # حساب السيولة المخصصة CMF
                 high, low, vol = df['High'], df['Low'], df['Volume']
                 ad = np.where(high == low, 0, ((2 * close - low - high) / (high - low + 1e-10)) * vol)
                 ad_series = pd.Series(ad, index=df.index)
-                mf_numerator = ad_series.rolling(cmf_len).sum()
-                mf_denominator = vol.rolling(cmf_len).sum()
-                mf = mf_numerator / (mf_denominator + 1e-10)
+                mf = ad_series.rolling(cmf_len).sum() / (vol.rolling(cmf_len).sum() + 1e-10)
                 
                 cmf_fast = calculate_hma(mf, 9).iloc[-1]
                 cmf_slow = calculate_hma(mf, 21).iloc[-1]
                 is_cmf_bullish = cmf_fast > cmf_slow
                 
                 # كشف تقاطع الـ RSI المخصص للإشارة الشرائية
-                trinity_buy_active = (rsi_fast.iloc[-1] > rsi_slow.iloc[-1]) and is_high_vol and is_cmf_bullish
+                trinity_buy_active = (rsi_fast > rsi_slow) and is_high_vol and is_cmf_bullish and is_mtf_bullish
                 
                 # فرز بناء على اختيارك الفني المتطابق
                 if filter_choice.startswith("عرض الأسهم") and not is_hma_green:
@@ -217,7 +217,6 @@ with tab2:
                 elif filter_choice.startswith("🔥") and not (c_price > kama_series.iloc[-1] and is_hma_green):
                     continue
                 
-                # إعداد التقرير النهائي للرادار
                 results.append({
                     "رقم السهم": code,
                     "اسم الشركة": name,
@@ -228,7 +227,7 @@ with tab2:
                     "حجم التداول (Vol)": "🔥 عالٍ" if is_high_vol else "💤 طبيعي",
                     "توافق الفريم الأكبر MTF": "🔝 إيجابي" if is_mtf_bullish else "⚠️ سلبي"
                 })
-            except Exception:
+            except:
                 continue
             progress_bar.progress((index + 1) / total_stocks)
             
