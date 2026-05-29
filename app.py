@@ -256,4 +256,52 @@ with tab2:
                     if score >= 8:
                         rating = "🔥 ذهبي خارق (Super Confluence)"
                     elif score >= 5:
-                        rating = "🟢 ص
+                        rating = "🟢 صاعد / إيجابي جيد"
+                    elif score >= 3:
+                        rating = "🟡 حيرة ومسار عرضي"
+                    else:
+                        rating = "🔴 هابط / تصريف وقائي"
+                        
+                    results.append({
+                        "رقم السهم": code,
+                        "اسم الشركة": name,
+                        "السعر الحالي": round(float(c_price), 2),
+                        "قوة التوافق الرقمي (Score)": f"{score} / 10",
+                        "أقرب مستوى فيبوناتشي": fib_status_str,
+                        "التصنيف الحالي": rating,
+                        "النقاط_الرقمية": score  # للحساب والفلترة البرمجية فقط
+                    })
+            except Exception as e:
+                continue
+                
+            progress_bar.progress((index + 1) / total_stocks)
+            time.sleep(0.005)
+            
+        status_text.empty()
+        progress_bar.empty()
+        
+        if results:
+            res_df = pd.DataFrame(results)
+            
+            # تطبيق تصفية النقاط برمجياً بناء على اختيارك الذكي
+            if filter_choice.startswith("🔥"):
+                res_df = res_df[res_df["النقاط_الرقمية"] >= 8]
+            elif filter_choice.startswith("🟢"):
+                res_df = res_df[(res_df["النقاط_الرقمية"] >= 5) & (res_df["النقاط_الرقمية"] <= 7)]
+            elif filter_choice.startswith("🟡"):
+                res_df = res_df[(res_df["النقاط_الرقمية"] >= 3) & (res_df["النقاط_الرقمية"] <= 4)]
+            elif filter_choice.startswith("🔴"):
+                res_df = res_df[res_df["النقاط_الرقمية"] < 3]
+                
+            # حذف العمود البرمجي قبل العرض النهائي ليبقى الجدول نظيفاً واحترافياً
+            res_df = res_df.drop(columns=["النقاط_الرقمية"])
+            
+            st.success(f"✅ تم الفرز والترتيب! تم العثور على {len(res_df)} شركة تطابق التصنيف المختار.")
+            if not res_df.empty:
+                # ترتيب الجدول تلقائياً ليظهر السهم الأقوى في الأعلى
+                res_df = res_df.sort_values(by="قوة التوافق الرقمي (Score)", ascending=False)
+                st.dataframe(res_df, use_container_width=True)
+            else:
+                st.warning("لا توجد شركات تحقق هذا الشرط الفني حالياً بالسوق السعودي.")
+        else:
+            st.error("عذراً، فشل الرادار في سحب البيانات اللحظية للشركات.")
