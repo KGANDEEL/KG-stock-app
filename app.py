@@ -99,8 +99,8 @@ def calculate_kama(series, length=100, fast=2, slow=30):
 # ==========================================
 # 2. إعدادات واجهة المستخدم
 # ==========================================
-st.set_page_config(page_title="منصة الفلترة التتابعية الذكية", layout="wide")
-st.title("🎯 رادار الفرز بـ KAMA + انعكاس خط هال (HMA)")
+st.set_page_config(page_title="منصة الاقتناص المبكر", layout="wide")
+st.title("🎯 رادار صيد القيعان (HMA Reversal + KAMA Position Locator)")
 
 st.sidebar.header("⚙️ إعدادات النمط الحركي")
 trading_style = st.sidebar.selectbox("نمط التداول الفعال لتحديد طول HMA:", ["Balanced", "Scalping", "Swing"])
@@ -113,7 +113,7 @@ else:
     hma_len = 9
 
 # التبويبات الرئيسية
-tab1, tab2 = st.tabs(["📊 شارت ومؤشرات السهم المخصصة", "🔍 رادار الفرز التتابعي الثنائي (KAMA + HMA)"])
+tab1, tab2 = st.tabs(["📊 شارت ومؤشرات السهم المخصصة", "🔍 رادار اقتناص القيعان وفحص KAMA"])
 
 # ==========================================
 # 3. القائمة الكاملة للأسهم المشغلة (63 شركة)
@@ -160,22 +160,22 @@ with tab1:
                 st.error("تأكد من كتابة رقم سهم صحيح وتوفر بيانات كافية.")
 
 # ==========================================
-# التبويب الثاني: رادار التصفية التتابعية المتقدم (KAMA + HMA)
+# التبويب الثاني: رادار اقتناص القيعان وفحص موقع KAMA
 # ==========================================
 with tab2:
-    st.header("🔍 رادار الفرز التتابعي المطور")
-    st.info(f"🚨 **بوابة الحماية الذكية مشغلة الآن بفلترين:** أي سهم سعره تحت KAMA **أو** مؤشر هال الخاص به أحمر (هابط)، يتم استبعاده كلياً. الأسهم التي تظهر بالجدول هي فقط التي تسير فوق KAMA وحصلت على خط هال (الأخضر) الصاعد.")
+    st.header("🔍 رادار التصفية واقتناص الفرص المبكرة")
+    st.info("💡 **فلسفة الرادار الحالية:** البوابة تمرر فقط الأسهم التي تحول فيها خط هال (HMA) للأخضر لضمان الدخول المبكر من الأسفل ومراقبة موقعها من KAMA لاقتناص الفرص الذهبية قبل الجميع.")
     
     filter_choice = st.selectbox(
-        "اختر جودة التوافق للأسهم الناجحة بالفلتر البوابي:",
+        "اختر تصنيف جودة الاندماج الفني:",
         [
-            "عرض كل الأسهم الصاعدة بالكامل (KAMA + HMA الأخضر)", 
+            "عرض كل الأسهم ذات الإشارات الخضراء على HMA", 
             "🔥 أسهم ذهبية خارقة التوافق (النقاط >= 8 من 10)", 
             "🟢 أسهم بزخم إيجابي جيد (النقاط من 5 إلى 7 من 10)"
         ]
     )
     
-    if st.button("تشغيل الرادار التتابعي المطور 🚀"):
+    if st.button("تشغيل رادار الاقتناص الذكي 🚀"):
         results = []
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -183,7 +183,7 @@ with tab2:
         excluded_count = 0
         
         for index, (code, name) in enumerate(saudi_market.items()):
-            status_text.text(f"🔄 الفلتر البوابي يفحص KAMA و HMA لـ: {name} ({code})...")
+            status_text.text(f"🔄 الحارس الذكي يفحص انعكاس HMA لـ: {name} ({code})...")
             
             try:
                 df = yf.Ticker(f"{code}.SR").history(period="1y")
@@ -191,28 +191,37 @@ with tab2:
                     close = df['Close']
                     c_price = close.iloc[-1]
                     
-                    # 🛑 1. الفلتر البوابي الأول: شرط KAMA
-                    kama_series = calculate_kama(close, length=100)
-                    kama_val = kama_series.iloc[-1]
-                    
-                    # 🛑 2. الفلتر البوابي الثاني: شرط تحول خط هال (HMA) للأخضر 
+                    # 🛑 الفلتر الأساسي الوحيد: شرط صعود مؤشر هال (HMA) للأخضر
                     hma_series = calculate_hma(close, length=hma_len)
                     hma_curr = hma_series.iloc[-1]
                     hma_prev = hma_series.iloc[-2]
                     hma_prev2 = hma_series.iloc[-3]
                     
-                    # إذا كان السعر تحت KAMA أو كان خط هال هابطاً (أحمر أي القيمة الحالية أصغر من السابقة) -> استبعاد فوراً
-                    if c_price <= kama_val or hma_curr <= hma_prev:
+                    if hma_curr <= hma_prev:
                         excluded_count += 1
-                        continue
+                        continue # استبعاد الأسهم ذات خط هال الأحمر (الهابط)
                     
-                    # فحص إذا كان التحول للأخضر طازجاً (هذه الشمعة صاعدة والشمعة السابقة كانت هابطة)
+                    # فحص طبيعة انعكاس HMA الحالي
                     if hma_prev <= hma_prev2:
                         hma_status = "🔥 إنعكاس جديد (بداية إيجابية)"
                     else:
                         hma_status = "🟢 صعود مستمر مسبقاً"
                     
-                    # 🟢 إذا نجح السهم في تجاوز البوابتين، نقوم الآن بحساب الـ 10 مؤشرات الأخرى لإعطائه التقييم
+                    # 📡 حساب موقع السعر الحالي ونسبته من خط KAMA الثقيل
+                    kama_series = calculate_kama(close, length=100)
+                    kama_val = kama_series.iloc[-1]
+                    pct_from_kama = ((c_price - kama_val) / kama_val) * 100
+                    
+                    if pct_from_kama < -5:
+                        kama_position_str = "🔴 تحت بعيد (منطقة اقتناص قاع)"
+                    elif -5 <= pct_from_kama < 0:
+                        kama_position_str = "Delta 🟡 تحت قريب (قرب الاختراق)"
+                    elif 0 <= pct_from_kama < 5:
+                        kama_position_str = "🟢 فوق قريب (تأكيد الاتجاه)"
+                    else:
+                        kama_position_str = "🔵 فوق بعيد (صعود قوي مسبق)"
+                    
+                    # 🟢 حساب الـ 10 مؤشرات المتبقية لتقييم قوة الاندماج الفني
                     rsi = calculate_rsi(close, 14).iloc[-1]
                     macd_l, macd_s = calculate_macd(close)
                     ema50 = calculate_ema(close, 50).iloc[-1]
@@ -244,7 +253,6 @@ with tab2:
                     }
                     closest_level = min(diffs, key=diffs.get)
                     
-                    # حساب الـ Confluence Score (من 10)
                     score = 0
                     if rsi > 50 or rsi < 30: score += 1
                     if macd_l.iloc[-1] > macd_s.iloc[-1]: score += 1
@@ -281,8 +289,10 @@ with tab2:
                         "رقم السهم": code,
                         "اسم الشركة": name,
                         "السعر الحالي": round(float(c_price), 2),
-                        "حالة مؤشر هال (HMA)": hma_status,
-                        "قوة التوافق الرقمي (Score)": f"{score} / 10",
+                        "إشارة مؤشر هال (HMA)": hma_status,
+                        "موقع السعر من KAMA": kama_position_str,
+                        "النسبة عن KAMA": f"{round(pct_from_kama, 2)}%",
+                        "قوة التوافق (Score)": f"{score} / 10",
                         "أقرب مستوى فيبوناتشي": fib_status_str,
                         "التصنيف الحالي": rating,
                         "النقاط_الرقمية": score
@@ -304,13 +314,13 @@ with tab2:
             elif filter_choice.startswith("🟢"):
                 res_df = res_df[(res_df["النقاط_الرقمية"] >= 5) & (res_df["النقاط_الرقمية"] <= 7)]
                 
-            st.write(f"📊 **تحليل النظم البرمجي:** تم حجب واستبعاد **{excluded_count} شركة** لعدم توافق اتجاه KAMA أو سلبية خط هال. ومرت **{len(res_df)} شركة** ناجحة.")
+            st.write(f"📊 **تحديث الفرز:** تم استبعاد **{excluded_count} شركة** لأن مؤشر هال الخاص بها أحمر (سالب)، وظهرت **{len(res_df)} شركة** يتحرك خط هال فيها بشكل إيجابي صاعد.")
             
             if not res_df.empty:
                 res_df = res_df.sort_values(by="النقاط_الرقمية", ascending=False)
                 res_df = res_df.drop(columns=["النقاط_الرقمية"])
                 st.dataframe(res_df, use_container_width=True)
             else:
-                st.warning("لا توجد أسهم تطابق جودة التوافق المحددة حالياً.")
+                st.warning("لا توجد أسهم بالخيارات الحالية.")
         else:
-            st.error("جميع شركات السوق حالياً مستبعدة بناءً على الفلتر الصارم (KAMA + HMA)!")
+            st.error("جميع شركات السوق حالياً هابطة ومؤشر هال أحمر بالكامل!")
