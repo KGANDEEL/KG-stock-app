@@ -29,13 +29,13 @@ with tab1:
                 st.error("❌ تأكد من رقم السهم الصحيح.")
 
 # ==========================================
-# التبويب الثاني: لوحة التصفية الشاملة لجميع الأسهم الكبرى
+# التبويب الثاني: لوحة التصفية الشاملة الآمنة
 # ==========================================
 with tab2:
     st.header("🕵️ المسح الآلي السريع لأسهم السوق الرئيسية")
     st.write("اضغط على الزر بالأسفل لفحص أكبر شركات السوق بناءً على متوسط (SMA 20) في ثوانٍ معدودة.")
     
-    # قاموس ضخم يحتوي على أهم وأغلب الشركات المؤثرة في السوق السعودي لحفظ المساحة والسرعة
+    # قائمة الشركات
     saudi_market = {
         "2222": "أرامكو", "1120": "الراجحي", "2010": "سابك", "7010": "STC", "1180": "الأهلي", 
         "1150": "الإنماء", "2310": "سبكيم", "5110": "كهرباء السعودية", "2082": "معادن", "4220": "إعمار",
@@ -48,43 +48,53 @@ with tab2:
         results = []
         
         with st.spinner("⚡ جاري جلب وتحليل بيانات جميع الأسهم دفعة واحدة..."):
-            # تحويل الرموز لصيغة ياهو فاينانس وربطها بمسافات للتحميل الجماعي
+            # تحويل الرموز لصيغة قائمة
             tickers_list = [f"{code}.SR" for code in saudi_market.keys()]
-            tickers_string = " ".join(tickers_list)
             
-            # سحر بايثون: تحميل بيانات كل الشركات بطلب واحد فقط!
-            all_data = yf.download(tickers_string, period="3mo", group_by='ticker', verbose=False)
+            # جلب البيانات بالطريقة الكلاسيكية المستقرة جداً
+            all_data = yf.download(tickers_list, period="3mo", verbose=False)
             
-            for code, name in saudi_market.items():
-                ticker_symbol = f"{code}.SR"
+            if not all_data.empty:
+                # استخراج أسعار الإغلاق فقط بشكل آمن لتجنب أي تعارض في الأنواع (TypeError)
+                try:
+                    closes = all_data['Close']
+                except KeyError:
+                    closes = pd.DataFrame()
                 
-                # استخراج بيانات السهم المحدده من الملف الضخم
-                if ticker_symbol in all_data.columns.levels[0]:
-                    df_scan = all_data[ticker_symbol].dropna()
-                    
-                    if len(df_scan) >= 20:
-                        # حساب المؤشر الفني
-                        df_scan['SMA20'] = df_scan['Close'].rolling(window=20).mean()
+                # فحص الأسهم المتاحة في جدول الإغلاقات
+                if not closes.empty:
+                    for code, name in saudi_market.items():
+                        ticker_symbol = f"{code}.SR"
                         
-                        latest_close = round(float(df_scan['Close'].iloc[-1]), 2)
-                        latest_sma20 = round(float(df_scan['SMA20'].iloc[-1]), 2)
-                        
-                        if latest_close > latest_sma20:
-                            signal = "🟢 شراء (اتجاه صاعد)"
-                        else:
-                            signal = "🔴 بيع (اتجاه هابط)"
+                        if ticker_symbol in closes.columns:
+                            # تنظيف البيانات الخاصة بالسهم من الفراغات
+                            close_series = closes[ticker_symbol].dropna()
                             
-                        results.append({
-                            "رقم السهم": code,
-                            "اسم الشركة": name,
-                            "السعر الحالي": latest_close,
-                            "متوسط 20 يوم": latest_sma20,
-                            "الحالة الفنية": signal
-                        })
+                            if len(close_series) >= 20:
+                                # حساب المتوسط الفني 20
+                                sma20_series = close_series.rolling(window=20).mean()
+                                
+                                # أخذ آخر القيم بدقة
+                                latest_close = round(float(close_series.iloc[-1]), 2)
+                                latest_sma20 = round(float(sma20_series.iloc[-1]), 2)
+                                
+                                # اتخاذ القرار البرمجي
+                                if latest_close > latest_sma20:
+                                    signal = "🟢 شراء (اتجاه صاعد)"
+                                else:
+                                    signal = "🔴 بيع (اتجاه هابط)"
+                                    
+                                results.append({
+                                    "رقم السهم": code,
+                                    "اسم الشركة": name,
+                                    "السعر الحالي": latest_close,
+                                    "متوسط 20 يوم": latest_sma20,
+                                    "الحالة الفنية": signal
+                                })
             
-            # عرض النتيجة
+            # عرض الجدول النهائي للمستخدم
             if results:
                 st.success(f"✅ تم تحليل {len(results)} شركة قيادية بنجاح!")
                 st.dataframe(pd.DataFrame(results), use_container_width=True)
             else:
-                st.error("لم نتمكن من جلب البيانات، جرب مرة أخرى.")
+                st.error("❌ عذراً، واجه السيرفر مشكلة مؤقتة في جلب البيانات من ياهو، فضلاً اضغط على الزر مجدداً.")
