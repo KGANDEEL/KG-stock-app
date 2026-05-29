@@ -6,7 +6,7 @@ import numpy as np
 import time
 
 # ==========================================
-# 1. دالات الحسابات الفنية المخصصة (ترجمة إستراتيجياتك الـ 10 + الفيبوناتشي)
+# 1. دالات الحسابات الفنية المخصصة (ترجمة إستراتيجياتك الـ 11 + الفيبوناتشي)
 # ==========================================
 
 def calculate_sma(series, length):
@@ -113,7 +113,7 @@ else:
     hma_src_len, rsi_fast_len, rsi_slow_len = 9, 14, 25
 
 # التبويبات الرئيسية
-tab1, tab2 = st.tabs(["📊 شارت ومؤشرات السهم المخصصة", "🔍 تصفية ورادار السوق بالنقاط (0-10)"])
+tab1, tab2 = st.tabs(["📊 شارت ومؤشرات السهم المخصصة", "🔍 تصفية ورادار السوق بالنقاط (0-11)"])
 
 # ==========================================
 # 3. القائمة الكاملة للأسهم المشغلة (63 شركة)
@@ -164,17 +164,17 @@ with tab1:
 # ==========================================
 with tab2:
     st.header("🕵️ لوحة الفرز والتصفية بناءً على قوة الاندماج الفني")
-    st.write(f"اللوحة تفحص حالياً **{len(saudi_market)} شركة** لتقييمها بناءً على الـ 10 مؤشرات + الفيبوناتشي المطور.")
+    st.write(f"اللوحة تفحص حالياً **{len(saudi_market)} شركة** لتقييمها بناءً على الـ 11 مؤشر الحاليين مع KAMA.")
     
     st.markdown("### 🎛️ خيارات الفرز الذكي بالتصنيف (Rating Filter)")
     filter_choice = st.selectbox(
         "اختر الفئة المستهدفة للتصفية الحالية:",
         [
             "عرض كل الشركات بدون استثناء", 
-            "🔥 الشركات الذهبية الخارقة (النقاط >= 8) - دخول قوي ونادر", 
-            "🟢 شركات بزخم إيجابي صاعد (النقاط من 5 إلى 7)", 
-            "🟡 شركات في مناطق حيرة وانتظار (النقاط 3 أو 4)", 
-            "🔴 شركات في مسار هابط/خروج (النقاط أقل من 3)"
+            "🔥 الشركات الذهبية الخارقة (النقاط >= 9 من 11) - دخول قوي ونادر", 
+            "🟢 شركات بزخم إيجابي صاعد (النقاط من 6 إلى 8)", 
+            "🟡 شركات في مناطق حيرة وانتظار (النقاط 4 أو 5)", 
+            "🔴 شركات في مسار هابط/خروج (النقاط أقل من 4)"
         ]
     )
     
@@ -193,7 +193,7 @@ with tab2:
                     close = df['Close']
                     c_price = close.iloc[-1]
                     
-                    # 1. حساب المؤشرات الـ 10 الحالية
+                    # 1. حساب المؤشرات الـ 10 الحالية + KAMA
                     rsi = calculate_rsi(close, 14).iloc[-1]
                     macd_l, macd_s = calculate_macd(close)
                     ema50 = calculate_ema(close, 50).iloc[-1]
@@ -203,6 +203,7 @@ with tab2:
                     adx, plus_di, minus_di = calculate_adx(df, 14)
                     mom = close.diff(10).iloc[-1]
                     obv = calculate_obv(df)
+                    kama_val = calculate_kama(close, length=100).iloc[-1]
                     
                     # 2. حساب خوارزمية الفيبوناتشي (آخر 100 شمعة)
                     fib_df = df.iloc[-100:]
@@ -225,7 +226,7 @@ with tab2:
                     }
                     closest_level = min(diffs, key=diffs.get)
                     
-                    # حساب الـ Confluence Score المخصص (من 10 نقاط)
+                    # حساب الـ Confluence Score المخصص (من 11 نقطة الآن)
                     score = 0
                     if rsi > 50 or rsi < 30: score += 1
                     if macd_l.iloc[-1] > macd_s.iloc[-1]: score += 1
@@ -237,7 +238,10 @@ with tab2:
                     if mom > 0: score += 1
                     if obv.diff(1).iloc[-1] > 0: score += 1
                     
-                    # نقطة الفيبوناتشي المطور: إذا كان عند دعم قوي أو السعر فوق خط الاتزان 50%
+                    # [جديد] إضافة نقطة KAMA الجوهرية للاتجاه
+                    if c_price > kama_val: score += 1
+                    
+                    # نقطة الفيبوناتشي المطور
                     fib_status_str = ""
                     if closest_level == "61.8%":
                         fib_status_str = "المنطقة الذهبية (61.8%)"
@@ -252,12 +256,12 @@ with tab2:
                         fib_status_str = f"مستوى ({closest_level})"
                         if c_price >= f236: score += 1
                     
-                    # تصنيف جودة الصفقة
-                    if score >= 8:
+                    # تصنيف جودة الصفقة بناءً على 11 نقطة
+                    if score >= 9:
                         rating = "🔥 ذهبي خارق (Super Confluence)"
-                    elif score >= 5:
+                    elif score >= 6:
                         rating = "🟢 صاعد / إيجابي جيد"
-                    elif score >= 3:
+                    elif score >= 4:
                         rating = "🟡 حيرة ومسار عرضي"
                     else:
                         rating = "🔴 هابط / تصريف وقائي"
@@ -266,10 +270,10 @@ with tab2:
                         "رقم السهم": code,
                         "اسم الشركة": name,
                         "السعر الحالي": round(float(c_price), 2),
-                        "قوة التوافق الرقمي (Score)": f"{score} / 10",
+                        "قوة التوافق الرقمي (Score)": f"{score} / 11",
                         "أقرب مستوى فيبوناتشي": fib_status_str,
                         "التصنيف الحالي": rating,
-                        "النقاط_الرقمية": score  # للحساب والفلترة البرمجية فقط
+                        "النقاط_الرقمية": score
                     })
             except Exception as e:
                 continue
@@ -283,23 +287,20 @@ with tab2:
         if results:
             res_df = pd.DataFrame(results)
             
-            # تطبيق تصفية النقاط برمجياً بناء على اختيارك الذكي
+            # تطبيق تصفية النقاط برمجياً بناء على خيارات الـ 11 نقطة الجديدة
             if filter_choice.startswith("🔥"):
-                res_df = res_df[res_df["النقاط_الرقمية"] >= 8]
+                res_df = res_df[res_df["النقاط_الرقمية"] >= 9]
             elif filter_choice.startswith("🟢"):
-                res_df = res_df[(res_df["النقاط_الرقمية"] >= 5) & (res_df["النقاط_الرقمية"] <= 7)]
+                res_df = res_df[(res_df["النقاط_الرقمية"] >= 6) & (res_df["النقاط_الرقمية"] <= 8)]
             elif filter_choice.startswith("🟡"):
-                res_df = res_df[(res_df["النقاط_الرقمية"] >= 3) & (res_df["النقاط_الرقمية"] <= 4)]
+                res_df = res_df[(res_df["النقاط_الرقمية"] >= 4) & (res_df["النقاط_الرقمية"] <= 5)]
             elif filter_choice.startswith("🔴"):
-                res_df = res_df[res_df["النقاط_الرقمية"] < 3]
+                res_df = res_df[res_df["النقاط_الرقمية"] < 4]
                 
-            # حذف العمود البرمجي قبل العرض النهائي ليبقى الجدول نظيفاً واحترافياً
-            res_df = res_df.drop(columns=["النقاط_الرقمية"])
-            
             st.success(f"✅ تم الفرز والترتيب! تم العثور على {len(res_df)} شركة تطابق التصنيف المختار.")
             if not res_df.empty:
-                # ترتيب الجدول تلقائياً ليظهر السهم الأقوى في الأعلى
-                res_df = res_df.sort_values(by="قوة التوافق الرقمي (Score)", ascending=False)
+                res_df = res_df.sort_values(by="النقاط_الرقمية", ascending=False)
+                res_df = res_df.drop(columns=["النقاط_الرقمية"])
                 st.dataframe(res_df, use_container_width=True)
             else:
                 st.warning("لا توجد شركات تحقق هذا الشرط الفني حالياً بالسوق السعودي.")
