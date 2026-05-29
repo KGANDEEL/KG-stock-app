@@ -99,14 +99,21 @@ def calculate_kama(series, length=100, fast=2, slow=30):
 # ==========================================
 # 2. إعدادات واجهة المستخدم
 # ==========================================
-st.set_page_config(page_title="منصة الفلترة التتابعية المتقدمة", layout="wide")
-st.title("🎯 رادار الفلترة التتابعية (KAMA Gatekeeper + Confluence Pro)")
+st.set_page_config(page_title="منصة الفلترة التتابعية الذكية", layout="wide")
+st.title("🎯 رادار الفرز بـ KAMA + انعكاس خط هال (HMA)")
 
-st.sidebar.header("⚙️ إعدادات الإستراتيجية")
-trading_style = st.sidebar.selectbox("نمط التداول الفعال:", ["Balanced", "Scalping", "Swing"])
+st.sidebar.header("⚙️ إعدادات النمط الحركي")
+trading_style = st.sidebar.selectbox("نمط التداول الفعال لتحديد طول HMA:", ["Balanced", "Scalping", "Swing"])
+
+if trading_style == "Scalping":
+    hma_len = 5
+elif trading_style == "Swing":
+    hma_len = 21
+else:
+    hma_len = 9
 
 # التبويبات الرئيسية
-tab1, tab2 = st.tabs(["📊 شارت ومؤشرات السهم المخصصة", "🔍 رادار التصفية التتابعية (KAMA ➡️ 10 Indicators)"])
+tab1, tab2 = st.tabs(["📊 شارت ومؤشرات السهم المخصصة", "🔍 رادار الفرز التتابعي الثنائي (KAMA + HMA)"])
 
 # ==========================================
 # 3. القائمة الكاملة للأسهم المشغلة (63 شركة)
@@ -141,7 +148,7 @@ with tab1:
             df = yf.Ticker(f"{stock_number}.SR").history(period="1y")
             if not df.empty and len(df) > 100:
                 df['KAMA'] = calculate_kama(df['Close'], length=100)
-                df['HMA_Signal'] = calculate_hma(df['Close'], length=21)
+                df['HMA_Signal'] = calculate_hma(df['Close'], length=hma_len)
                 
                 fig = go.Figure()
                 fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="السعر"))
@@ -153,31 +160,30 @@ with tab1:
                 st.error("تأكد من كتابة رقم سهم صحيح وتوفر بيانات كافية.")
 
 # ==========================================
-# التبويب الثاني: رادار التصفية التتابعية المتقدم
+# التبويب الثاني: رادار التصفية التتابعية المتقدم (KAMA + HMA)
 # ==========================================
 with tab2:
-    st.header("🔍 رادار التصفية والفرز الذكي")
-    st.info("🚨 النظام الآن يعمل بذكاء: أي سهم سعره الحالي (تحت خط إستراتيجية KAMA) يتم استبعاده فوراً وحجبه لحمايتك، والأسهم الظاهرة فقط هي الأسهم الصاعدة بالكامل وفقاً لـ KAMA ثم يتم تقييمها بقوة الـ 10 مؤشرات الأخرى.")
+    st.header("🔍 رادار الفرز التتابعي المطور")
+    st.info(f"🚨 **بوابة الحماية الذكية مشغلة الآن بفلترين:** أي سهم سعره تحت KAMA **أو** مؤشر هال الخاص به أحمر (هابط)، يتم استبعاده كلياً. الأسهم التي تظهر بالجدول هي فقط التي تسير فوق KAMA وحصلت على خط هال (الأخضر) الصاعد.")
     
-    st.markdown("### 🎛️ خيارات عرض وتصفية الأسهم الناجحة من الفلتر")
     filter_choice = st.selectbox(
-        "اختر جودة التوافق للأسهم الصاعدة:",
+        "اختر جودة التوافق للأسهم الناجحة بالفلتر البوابي:",
         [
-            "عرض كل الأسهم التي اجتازت KAMA بنجاح", 
+            "عرض كل الأسهم الصاعدة بالكامل (KAMA + HMA الأخضر)", 
             "🔥 أسهم ذهبية خارقة التوافق (النقاط >= 8 من 10)", 
             "🟢 أسهم بزخم إيجابي جيد (النقاط من 5 إلى 7 من 10)"
         ]
     )
     
-    if st.button("تشغيل الرادار التتابعي الخارق 🚀"):
+    if st.button("تشغيل الرادار التتابعي المطور 🚀"):
         results = []
         progress_bar = st.progress(0)
         status_text = st.empty()
         total_stocks = len(saudi_market)
-        excluded_count = 0  # لحساب عدد الشركات التي حجبها فلتير KAMA الصارم
+        excluded_count = 0
         
         for index, (code, name) in enumerate(saudi_market.items()):
-            status_text.text(f"🔄 الحارس الذكي يفحص اتجاه KAMA لـ: {name} ({code})...")
+            status_text.text(f"🔄 الفلتر البوابي يفحص KAMA و HMA لـ: {name} ({code})...")
             
             try:
                 df = yf.Ticker(f"{code}.SR").history(period="1y")
@@ -185,15 +191,28 @@ with tab2:
                     close = df['Close']
                     c_price = close.iloc[-1]
                     
-                    # 🛑 الفلتر الأول: شرط إستراتيجية KAMA الصارم (السعر فوق خط الاتجاه التكيفي)
+                    # 🛑 1. الفلتر البوابي الأول: شرط KAMA
                     kama_series = calculate_kama(close, length=100)
                     kama_val = kama_series.iloc[-1]
                     
-                    if c_price <= kama_val:
-                        excluded_count += 1
-                        continue  # ❌ استبعاد السهم فوراً والانتقال للشركة التالية دون حساب المؤشرات الأخرى
+                    # 🛑 2. الفلتر البوابي الثاني: شرط تحول خط هال (HMA) للأخضر 
+                    hma_series = calculate_hma(close, length=hma_len)
+                    hma_curr = hma_series.iloc[-1]
+                    hma_prev = hma_series.iloc[-2]
+                    hma_prev2 = hma_series.iloc[-3]
                     
-                    # 🟢 الإستراتيجية الثانية: السهم ناجح! نبدأ الآن بفحص الـ 10 مؤشرات + الفيبوناتشي المطور
+                    # إذا كان السعر تحت KAMA أو كان خط هال هابطاً (أحمر أي القيمة الحالية أصغر من السابقة) -> استبعاد فوراً
+                    if c_price <= kama_val or hma_curr <= hma_prev:
+                        excluded_count += 1
+                        continue
+                    
+                    # فحص إذا كان التحول للأخضر طازجاً (هذه الشمعة صاعدة والشمعة السابقة كانت هابطة)
+                    if hma_prev <= hma_prev2:
+                        hma_status = "🔥 إنعكاس جديد (بداية إيجابية)"
+                    else:
+                        hma_status = "🟢 صعود مستمر مسبقاً"
+                    
+                    # 🟢 إذا نجح السهم في تجاوز البوابتين، نقوم الآن بحساب الـ 10 مؤشرات الأخرى لإعطائه التقييم
                     rsi = calculate_rsi(close, 14).iloc[-1]
                     macd_l, macd_s = calculate_macd(close)
                     ema50 = calculate_ema(close, 50).iloc[-1]
@@ -204,7 +223,7 @@ with tab2:
                     mom = close.diff(10).iloc[-1]
                     obv = calculate_obv(df)
                     
-                    # حساب خوارزمية الفيبوناتشي (آخر 100 شمعة للأسهم الصاعدة)
+                    # خوارزمية الفيبوناتشي
                     fib_df = df.iloc[-100:]
                     fib_high = fib_df['High'].max()
                     fib_low = fib_df['Low'].min()
@@ -225,7 +244,7 @@ with tab2:
                     }
                     closest_level = min(diffs, key=diffs.get)
                     
-                    # حساب الـ Confluence Score المخصص (من 10 نقاط كاملة)
+                    # حساب الـ Confluence Score (من 10)
                     score = 0
                     if rsi > 50 or rsi < 30: score += 1
                     if macd_l.iloc[-1] > macd_s.iloc[-1]: score += 1
@@ -237,7 +256,6 @@ with tab2:
                     if mom > 0: score += 1
                     if obv.diff(1).iloc[-1] > 0: score += 1
                     
-                    # نقطة الفيبوناتشي المطور
                     fib_status_str = ""
                     if closest_level == "61.8%":
                         fib_status_str = "المنطقة الذهبية (61.8%)"
@@ -251,20 +269,19 @@ with tab2:
                     else:
                         fib_status_str = f"مستوى ({closest_level})"
                         if c_price >= f236: score += 1
-                    
-                    # تصنيف جودة الاندماج الفني
+                        
                     if score >= 8:
-                        rating = "🔥 ذهبي خارق (Super Confluence)"
+                        rating = "🔥 ذهبي خارق"
                     elif score >= 5:
-                        rating = "🟢 صاعد / إيجابي جيد"
+                        rating = "🟢 إيجابي صاعد"
                     else:
-                        rating = "🟡 ضعف نسبي في الزخم"
+                        rating = "🟡 حيرة / زخم ضعيف"
                         
                     results.append({
                         "رقم السهم": code,
                         "اسم الشركة": name,
                         "السعر الحالي": round(float(c_price), 2),
-                        "حالة حارس الاتجاه (KAMA)": "✅ صاعد بالكامل",
+                        "حالة مؤشر هال (HMA)": hma_status,
                         "قوة التوافق الرقمي (Score)": f"{score} / 10",
                         "أقرب مستوى فيبوناتشي": fib_status_str,
                         "التصنيف الحالي": rating,
@@ -279,23 +296,21 @@ with tab2:
         status_text.empty()
         progress_bar.empty()
         
-        # عرض النتائج النهائية المصفاة بالترتيب
         if results:
             res_df = pd.DataFrame(results)
             
-            # فلترة إضافية بناء على رغبة المستخدم في جودة النقاط
             if filter_choice.startswith("🔥"):
                 res_df = res_df[res_df["النقاط_الرقمية"] >= 8]
             elif filter_choice.startswith("🟢"):
                 res_df = res_df[(res_df["النقاط_الرقمية"] >= 5) & (res_df["النقاط_الرقمية"] <= 7)]
                 
-            st.write(f"📊 **إحصائية سريعة:** قام فلتر KAMA الصارم بحجب **{excluded_count} شركة** لأنها في اتجاه هابط، وسمح بمرور **{len(res_df)} شركة** فقط تحقق الشروط الكاملة.")
+            st.write(f"📊 **تحليل النظم البرمجي:** تم حجب واستبعاد **{excluded_count} شركة** لعدم توافق اتجاه KAMA أو سلبية خط هال. ومرت **{len(res_df)} شركة** ناجحة.")
             
             if not res_df.empty:
                 res_df = res_df.sort_values(by="النقاط_الرقمية", ascending=False)
                 res_df = res_df.drop(columns=["النقاط_الرقمية"])
                 st.dataframe(res_df, use_container_width=True)
             else:
-                st.warning("لا توجد أسهم حالياً تجتاز الفلتر الأول والثاني معاً بالخيارات المحددة.")
+                st.warning("لا توجد أسهم تطابق جودة التوافق المحددة حالياً.")
         else:
-            st.error("جميع الشركات في السوق حالياً تحت خط الـ KAMA (اتجاه هابط عام)!")
+            st.error("جميع شركات السوق حالياً مستبعدة بناءً على الفلتر الصارم (KAMA + HMA)!")
