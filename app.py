@@ -39,29 +39,22 @@ def calculate_kama(series, length=100, fast=2, slow=30):
         kama[i] = kama[i-1] + sc.iloc[i] * (series.iloc[i] - kama[i-1])
     return pd.Series(kama, index=series.index)
 
-def calculate_rsi(series, length=14):
-    delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=length).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=length).mean()
-    rs = gain / (loss + 1e-10)
-    return 100 - (100 / (1 + rs))
-
 # ==========================================
-# 2. واجهة المستخدم الرادار
+# 2. واجهة المستخدم وإعدادات الرادار
 # ==========================================
 st.set_page_config(page_title="The Ultimate Trinity Radar Pro", layout="wide")
 st.title("🎯 رادار الاقتناص الاحترافي المتوافق مع الشارت (Trinity & KAMA Pro)")
 
-st.sidebar.header("⚙️ الإعدادات الافتراضية للمؤشر")
-trading_style = st.sidebar.selectbox("نمط التداول النشط:", ["Balanced", "Scalping", "Swing"])
+st.sidebar.header("⚙️ التحكم بحساسية التوافق")
+# إضافة نسبة تسامح لمنع تقلبات البيانات الخاطئة بين المنصات
+tolerance = st.sidebar.slider("نسبة فلتر التسامح لحركة HMA:", 0.0000, 0.0050, 0.0008, step=0.0001, 
+                              help="زيادة النسبة تجعل الرادار أكثر صرامة في اختيار اللون الأخضر وتمنع إشارات ياهو فاينانس الوهمية")
 
-# تثبيت الفترات الأساسية بناءً على المدخلات المباشرة للشارت لمنع التضارب
 kama_length = st.sidebar.number_input("KAMA Length (Trend)", value=100)
 hma_length = st.sidebar.number_input("HMA Length (Signal)", value=21)
 
 tab1, tab2 = st.tabs(["📊 الشارت وفحص الخطوط اللحظي", "🔍 رادار فحص وتصفية السوق"])
 
-# القائمة الكاملة للأسهم
 saudi_market = {
     "2310": "سبكيم العالمية", "3080": "أسمنت الشرقية", "4250": "جبل عمر", "4110": "باتك",
     "3010": "أسمنت العربية", "3020": "أسمنت اليمامة", "3030": "أسمنت السعودية", 
@@ -71,27 +64,27 @@ saudi_market = {
 }
 
 # ==========================================
-# التبويب الأول: الشارت التفصيلي والمطابقة
+# التبويب الأول: الشارت والتحقق
 # ==========================================
 with tab1:
     st.header("📈 استعراض دقة الإستراتيجية وفحص الخطوط")
     stock_number = st.text_input("اكتب رقم السهم لتبين حالته الحالية:", "2310", key="chart_input")
     
     if st.button("تحليل ورسم الشارت"):
-        with st.spinner("جاري مطابقة حركة المؤشر الحالية..."):
+        with st.spinner("جاري جلب البيانات وفحص التغير الحركي..."):
             ticker = f"{stock_number}.SR"
-            df_1d = yf.Ticker(ticker).history(period="1y", interval="1d")
+            df_1d = yf.Ticker(ticker).history(period="1y", interval="1d").dropna(subset=['Close'])
             
             if not df_1d.empty and len(df_1d) > 100:
-                df_1d = df_1d.dropna(subset=['Close'])
                 df_1d['KAMA'] = calculate_kama(df_1d['Close'], length=kama_length)
                 df_1d['HMA_Signal'] = calculate_hma(df_1d['Close'], length=hma_length)
                 
-                # التحقق الصارم من التغير
                 hma_c = df_1d['HMA_Signal'].iloc[-1]
                 hma_p = df_1d['HMA_Signal'].iloc[-2]
                 
-                curr_color = "🟢 أخضر (صاعد)" if hma_c > hma_p else "🔴 أحمر (هابط)"
+                # تطبيق شرط التسامح في الشارت أيضاً
+                is_green = (hma_c - hma_p) > (hma_p * tolerance)
+                curr_color = "🟢 أخضر (صاعد)" if is_green else "🔴 أحمر (هابط / تذبذب ضعيف)"
                 
                 fig = go.Figure()
                 fig.add_trace(go.Candlestick(x=df_1d.index, open=df_1d['Open'], high=df_1d['High'], low=df_1d['Low'], close=df_1d['Close'], name="السعر"))
@@ -104,7 +97,7 @@ with tab1:
                 st.subheader(f"📊 قراءة الرادار الحالية للسهم رقم {stock_number}: خط HMA يعطي إشارة: **{curr_color}**")
 
 # ==========================================
-# التبويب الثاني: الرادار النظيف والمحمي من الفجوات
+# التبويب الثاني: الرادار الذكي الحذر
 # ==========================================
 with tab2:
     st.header("🔍 تصفية السوق بناءً على تلوين خط HMA الفعلي")
@@ -125,7 +118,6 @@ with tab2:
         for index, (code, name) in enumerate(saudi_market.items()):
             ticker_key = f"{code}.SR"
             try:
-                # سحب فردي ونظيف لبيانات السهم لمنع تداخل أخطاء الفجوات السعرية
                 df = yf.Ticker(ticker_key).history(period="1y", interval="1d").dropna(subset=['Close'])
                 if len(df) < 100:
                     continue
@@ -133,18 +125,16 @@ with tab2:
                 close = df['Close']
                 c_price = close.iloc[-1]
                 
-                # الحساب الصافي للمؤشرات الرئيسية للشارت
                 hma_series = calculate_hma(close, length=hma_length)
                 kama_series = calculate_kama(close, length=kama_length)
                 
                 hma_curr = hma_series.iloc[-1]
                 hma_prev = hma_series.iloc[-2]
                 
-                # شرط اللون المطابق للرسم بدقة
-                is_hma_green = hma_curr > hma_prev
+                # إجبار الكود على اشتراط صعود حقيقي يتخطى نسبة التسامح المحددة في الشريط الجانبي
+                is_hma_green = (hma_curr - hma_prev) > (hma_prev * tolerance)
                 hma_status_str = "🟢 أخضر (صاعد)" if is_hma_green else "🔴 أحمر (هابط)"
                 
-                # تطبيق الفرز المشروط الصارم للحجب
                 if filter_choice.startswith("عرض الأسهم") and not is_hma_green:
                     continue
                 elif filter_choice.startswith("🔥") and not (c_price > kama_series.iloc[-1] and is_hma_green):
@@ -155,8 +145,7 @@ with tab2:
                     "اسم الشركة": name,
                     "السعر الحالي": round(float(c_price), 2),
                     "حالة مؤشر هال HMA": hma_status_str,
-                    "موقع السعر من خط KAMA": "🟢 فوق الاتجاه" if c_price > kama_series.iloc[-1] else "🔴 تحت الاتجاه",
-                    "آخر قيمة إغلاق": round(float(close.iloc[-1]), 2)
+                    "موقع السعر من خط KAMA": "🟢 فوق الاتجاه" if c_price > kama_series.iloc[-1] else "🔴 تحت الاتجاه"
                 })
             except:
                 continue
