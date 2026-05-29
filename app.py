@@ -114,7 +114,7 @@ else:
 tab1, tab2 = st.tabs(["📊 شارت ومؤشرات السهم المخصصة", "🔍 رادار اقتناص القيعان وفحص KAMA"])
 
 # ==========================================
-# 3. قائمة الأسهم المحدثة (63 شركة)
+# 3. قائمة الأسهم المشغلة (63 شركة)
 # ==========================================
 saudi_market = {
     "4250": "جبل عمر", "4110": "باتك",
@@ -158,13 +158,14 @@ with tab1:
                 st.error("تأكد من كتابة رقم سهم صحيح وتوفر بيانات كافية.")
 
 # ==========================================
-# التبويب الثاني: الرادار فائق السرعة والمحصن من الأخطاء
+# التبويب الثاني: الرادار النظيف والمصحح
 # ==========================================
 with tab2:
     st.header("🔍 رادار التصفية واقتناص الفرص المبكرة")
-    st.info("⚡ **محرك التدفق الجماعي مفعل:** يتم الآن جلب بيانات السوق كاملة في ثانية واحدة وحمايتك تماماً من تعليق المنصة.")
+    st.info("⚡ **تم إصلاح محرك الفرز وتطهير البيانات:** تم تعديل الكود ليعمل بشكل متوافق تماماً مع إشارات الشارت وبدون أي أخطاء برمجية.")
     
-    filter_choice = St.selectbox(
+    # تم تصحيح الخطأ المطبعي هنا من St إلى st واكتملت الحماية
+    filter_choice = st.selectbox(
         "اختر تصنيف جودة التوافق الفني:",
         [
             "عرض كل الأسهم ذات الإشارات الخضراء الصاعدة على HMA", 
@@ -177,9 +178,8 @@ with tab2:
         results = []
         excluded_count = 0
         
-        # 🚀 الفتح البرمجي الخارق: سحب بيانات 63 شركة دفعة واحدة لمنع التعليق
         tickers_list = [f"{code}.SR" for code in saudi_market.keys()]
-        with st.spinner("⚡ جاري سحب بيانات السوق كاملة محلياً دفعة واحدة (توفيراً للوقت)..."):
+        with st.spinner("⚡ جاري جلب بيانات السوق وتطهيرها من التشويه..."):
             try:
                 all_data = yf.download(tickers_list, period="1y", group_by='ticker', progress=False)
             except Exception as e:
@@ -189,18 +189,17 @@ with tab2:
         progress_bar = st.progress(0)
         total_stocks = len(saudi_market)
         
-        # تحليل البيانات محلياً بسرعة البرق
         for index, (code, name) in enumerate(saudi_market.items()):
             ticker_key = f"{code}.SR"
             
             try:
-                # التأكد من وجود البيانات وعدم خلوها
                 if ticker_key not in all_data.columns.levels[0]:
                     continue
                 
                 df = all_data[ticker_key].copy()
-                # 🧼 تطهير البيانات كلياً وإسقاط شمعة اليوم إذا كانت فارغة أو مشوهة لمنع القراءات الخاطئة
-                df = df.dropna(subset=['Close', 'High', 'Low'])
+                
+                # 🧼 خطوة التطهير الحاسمة: إزالة التواريخ الفارغة التي كانت تسبب القراءات الخاطئة
+                df = df.dropna(subset=['Close', 'High', 'Low', 'Open'])
                 
                 if len(df) < 100:
                     continue
@@ -208,11 +207,10 @@ with tab2:
                 close = df['Close']
                 c_price = close.iloc[-1]
                 
-                # حساب المؤشرات
+                # حساب المؤشرات على البيانات المطهّرة النظيفة
                 hma_series = calculate_hma(close, length=hma_len)
                 kama_series = calculate_kama(close, length=100)
                 
-                # فحص صارم: لو الحسابات الأخيرة فارغة تخطى السهم فوراً لضمان دقة النتائج
                 if hma_series.isna().iloc[-3:].any() or kama_series.isna().iloc[-1]:
                     continue
                     
@@ -220,7 +218,7 @@ with tab2:
                 hma_prev = hma_series.iloc[-2]
                 hma_prev2 = hma_series.iloc[-3]
                 
-                # 🛑 الفلتر الأساسي المنظف: شرط صعود مؤشر هال للأخضر
+                # 🛑 الفلتر الأساسي المنظف: شرط صعود مؤشر هال للأخضر (الحالي أكبر من السابق تماماً)
                 if hma_curr <= hma_prev:
                     excluded_count += 1
                     continue
@@ -231,7 +229,7 @@ with tab2:
                 else:
                     hma_status = "🟢 صعود مستمر مسبقاً"
                 
-                # 📡 حساب النسبة والموقع الدقيق من خط KAMA الثقيل لطلبك المخصص
+                # حساب النسبة والموقع الدقيق من خط KAMA
                 kama_val = kama_series.iloc[-1]
                 pct_from_kama = ((c_price - kama_val) / kama_val) * 100
                 
@@ -244,7 +242,7 @@ with tab2:
                 else:
                     kama_position_str = "🔵 فوق بعيد (صعود قوي مسبق)"
                 
-                # حساب توافق الـ 10 مؤشرات
+                # حساب توافق الـ 10 مؤشرات الأخرى
                 rsi = calculate_rsi(close, 14).iloc[-1]
                 macd_l, macd_s = calculate_macd(close)
                 ema50 = calculate_ema(close, 50).iloc[-1]
@@ -255,7 +253,7 @@ with tab2:
                 mom = close.diff(10).iloc[-1]
                 obv = calculate_obv(df)
                 
-                # خوارزمية الفيبوناتشي المطور
+                # خوارزمية الفيبوناتشي
                 fib_df = df.iloc[-100:]
                 fib_high = fib_df['High'].max()
                 fib_low = fib_df['Low'].min()
@@ -309,7 +307,6 @@ with tab2:
             
         progress_bar.empty()
         
-        # عرض البيانات النهائية المستقرة
         if results:
             res_df = pd.DataFrame(results)
             if filter_choice.startswith("🔥"):
@@ -317,7 +314,7 @@ with tab2:
             elif filter_choice.startswith("🟢"):
                 res_df = res_df[(res_df["النقاط_الرقمية"] >= 5) & (res_df["النقاط_الرقمية"] <= 7)]
                 
-            st.write(f"📊 **تحليل النظم المستقر:** تم حجب **{excluded_count} شركة** ذات مسار هابط (خط هال أحمر)، ومرت **{len(res_df)} شركة** إيجابية بالكامل ومحمية من التشويه السعري.")
+            st.write(f"📊 **تحليل النظم المستقر:** تم حجب **{excluded_count} شركة** ذات مسار هابط، ومرت **{len(res_df)} شركة** إيجابية ومطابقة تماماً للشارت.")
             
             if not res_df.empty:
                 res_df = res_df.sort_values(by="النقاط_الرقمية", ascending=False)
