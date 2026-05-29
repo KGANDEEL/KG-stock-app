@@ -4,40 +4,51 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 
-# دالة حساب ميل الخط (Slope) للتحقق من قوة الاتجاه
+# 1. تعريف القائمة أولاً لتجنب خطأ الـ NameError
+saudi_market = {
+    "2310": "سبكيم العالمية", "3080": "أسمنت الشرقية", "4250": "جبل عمر", "4110": "باتك",
+    "3010": "أسمنت العربية", "3020": "أسمنت اليمامة", "3030": "أسمنت السعودية", 
+    "3040": "أسمنت القصيم", "3050": "أسمنت الجنوبية", "3060": "أسمنت ينبع", 
+    "3090": "أسمنت تبوك", "1120": "الراجحي", "1180": "الأهلي", "1150": "الإنماء", 
+    "2222": "أرامكو السعودية", "2010": "سابك", "2082": "معادن", "7010": "STC"
+}
+
+# 2. الدوال الفنية
+def calculate_wma(series, length):
+    weights = np.arange(1, length + 1)
+    return series.rolling(length).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
+
+def calculate_hma(series, length):
+    half_len = int(length / 2)
+    sqrt_len = int(np.sqrt(length))
+    diff = 2 * calculate_wma(series, half_len) - calculate_wma(series, length)
+    return calculate_wma(diff, sqrt_len)
+
 def calculate_slope(series, length=5):
-    # نأخذ آخر 5 نقاط لنحسب زاوية الميل
     y = series.iloc[-length:].values
     x = np.arange(len(y))
-    slope, intercept = np.polyfit(x, y, 1)
+    slope, _ = np.polyfit(x, y, 1)
     return slope
 
-# (بقية الدوال كما هي: calculate_hma, calculate_kama, calculate_rsi)
-# [ملاحظة: استخدم نفس الدوال السابقة لضمان الاستقرار]
-
-# ==========================================
-# الرادار الذكي بنظام "زاوية الميل" (Slope Radar)
-# ==========================================
-st.title("🎯 رادار القناص: نظام زاوية الميل (Slope-Based Trinity)")
+# 3. واجهة المستخدم
+st.title("🎯 رادار القناص: نظام زاوية الميل")
 
 if st.button("تفعيل الرادار القناص 🚀"):
     results = []
-    # هنا يتم الفحص
+    # الآن الكود سيعرف saudi_market بدون مشاكل
     for code, name in saudi_market.items():
         try:
             df = yf.Ticker(f"{code}.SR").history(period="1y", interval="1d")
-            close = df['Close']
+            if df.empty: continue
             
-            # حساب خط هال
+            close = df['Close']
             hma_series = calculate_hma(close, 21)
             
-            # حساب قوة الميل (هذا هو السر!)
+            # حساب الميل (الزخم)
             current_slope = calculate_slope(hma_series, length=5)
             
-            # شرط القناص: لا أخضر إلا إذا كان الميل إيجابياً وبقوة تفوق التذبذب
-            is_strong_buy = current_slope > 0.05 
-            
-            if is_strong_buy:
+            # شرط الصعود القوي
+            if current_slope > 0.05:
                 results.append({"السهم": name, "الحالة": "🟢 اتجاه صاعد قوي (مؤكد)"})
             else:
                 results.append({"السهم": name, "الحالة": "🔴 اتجاه ضعيف أو هابط"})
