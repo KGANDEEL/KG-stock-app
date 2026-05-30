@@ -1,3 +1,17 @@
+import sys
+import subprocess
+
+# هذه الأسطر ستجبر السيرفر على تثبيت المكتبة فوراً إذا لم يجدها
+try:
+    import pandas_ta as ta
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pandas-ta", "yfinance"])
+    import pandas_ta as ta
+
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import numpy as np
 import streamlit as st
 import yfinance as yf
 import pandas as pd
