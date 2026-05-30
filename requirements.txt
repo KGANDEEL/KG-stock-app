@@ -1,5 +1,5 @@
 streamlit
 yfinance
 pandas
-numpy==1.23.5
-pandas-ta
+numpy
+git+https://github.com/twopirllc/pandas-ta.git@development
